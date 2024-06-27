@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">My Application</string>
+    <string name="stop">STOP</string>
+    <string name="back">BACK</string>
+    <string name="welcome">Welcome</string>
+    <string name="start">START</string>
+    <string name="touch_handling">Touch event handling (input latency): </string>
+    <string name="display_latency">Rendering delay (output latency) </string>
+    <string name="reaction_time">Reaction Time: </string>
+
+</resources>
