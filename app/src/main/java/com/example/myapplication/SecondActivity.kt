@@ -32,8 +32,9 @@ class SecondActivity : ComponentActivity() {
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (buttonAppearRequestedTime > 0) {
+                buttonAppearRequestedTime = System.nanoTime()
+                runOnUiThread{showDot.visibility = View.VISIBLE }
                 buttonActualAppearTime = System.nanoTime()
-                showDot.visibility = View.VISIBLE
                 val latencyTime = (buttonActualAppearTime - buttonAppearRequestedTime) / 1_000_000.0
                 Log.d("SecondActivity", "Rendering Delay: $latencyTime ms")
                 visibilityTimeTextView.text = "Rendering delay (output latency): ${latencyTime} ms"
