@@ -2,74 +2,105 @@ package com.example.myapplication
 
 import android.content.Intent
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
+import android.view.Choreographer
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
 
 class ThirdActivity : ComponentActivity() {
-    private var visibilitySetTime: Long = 0
-    private var invisibilitySetTime: Long = 0
-    private var dotVisibleTime: Long = 0
 
+    private var buttonAppearRequestedTime: Long = 0
+    private var buttonActualAppearTime: Long = 0
+    private var buttonClickTime: Long = 0
+    private var buttonDisappearTime: Long = 0
+
+    private lateinit var showDot: View
+    private lateinit var visibilityTimeTextView: TextView
+    private lateinit var invisibilityTimeTextView: TextView
+    private lateinit var reactionTimeTextView: TextView
+
+    private val frameCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (buttonAppearRequestedTime > 0) {
+                buttonAppearRequestedTime = System.nanoTime()
+                runOnUiThread { showDot.visibility = View.VISIBLE }
+                buttonActualAppearTime = System.nanoTime()
+                val latencyTime = (buttonActualAppearTime - buttonAppearRequestedTime) / 1_000_000.0
+                Log.d("ThirdActivity", "Rendering Delay: $latencyTime ms")
+                visibilityTimeTextView.text = "Rendering delay (output latency): ${latencyTime} ms"
+                buttonAppearRequestedTime = 0 // Reset after measurement
+            }
+            // Schedule the next frame callback
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
+    @OptIn(ExperimentalTime::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_second)
 
-        val backClick = findViewById<Button>(R.id.backButton)
-        backClick.text = getString(R.string.back)
-        val stopDot = findViewById<Button>(R.id.stopButton)
-        stopDot.text = getString(R.string.stop)
-        val showDot = findViewById<View>(R.id.red_dot)
+        showDot = findViewById(R.id.red_dot)
+        showDot.visibility = View.INVISIBLE
+        val stopButton = findViewById<Button>(R.id.stopButton)
+        val backButton = findViewById<Button>(R.id.backButton)
+        backButton.text = getString(R.string.back)
+        stopButton.text = getString(R.string.stop)
 
-        val visibilityTimeTextView = findViewById<TextView>(R.id.visibilityTimeTextView)
+        visibilityTimeTextView = findViewById(R.id.visibilityTimeTextView)
         visibilityTimeTextView.text = getString(R.string.display_latency)
-        val invisibilityTimeTextView = findViewById<TextView>(R.id.invisibilityTimeTextView)
+        invisibilityTimeTextView = findViewById(R.id.invisibilityTimeTextView)
         invisibilityTimeTextView.text = getString(R.string.touch_handling)
-        val reactionTimeTextView = findViewById<TextView>(R.id.reactionTimeTextView)
+        reactionTimeTextView = findViewById(R.id.reactionTimeTextView)
         reactionTimeTextView.text = getString(R.string.reaction_time)
 
-        backClick.setOnClickListener {
+        // Coroutine to manage the stop button visibility
+        lifecycleScope.launch {
+            try {
+                delay(2.seconds)
+                buttonAppearRequestedTime = System.nanoTime()
+                Choreographer.getInstance().postFrameCallback(frameCallback)
+
+                // Wait until stop button is clicked
+                stopButton.setOnClickListener {
+                    buttonClickTime = System.nanoTime()
+                    Log.d("ThirdActivity", "Button Click Time: $buttonClickTime ms")
+                    val reactionDuration = (buttonClickTime - buttonActualAppearTime) / 1_000_000.0
+                    Log.d("ThirdActivity", "Reaction Duration: $reactionDuration ms")
+                    reactionTimeTextView.text = "Reaction Time: ${reactionDuration}  ms"
+
+                    runOnUiThread {
+                        showDot.visibility = View.GONE
+                        buttonDisappearTime = System.nanoTime()
+
+                        val disappearDuration =
+                            (buttonDisappearTime - buttonClickTime) / 1_000_000.0
+                        Log.d("ThirdActivity", "Touch Event Handling: $disappearDuration ns")
+                        invisibilityTimeTextView.text =
+                            "Touch event handling (input latency): ${disappearDuration} ms"
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ThirdActivity", "Error in coroutine", e)
+            }
+        }
+
+        backButton.setOnClickListener {
             intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
         }
+    }
 
-        // Handler func used to delay the appearance of red dot, and is set to appear only after 2000ms
-        Handler(Looper.getMainLooper()).postDelayed({
-            visibilitySetTime = System.nanoTime() // Record the time when visibility is set
-            showDot.visibility = View.VISIBLE
-
-            // Measure the time when the view is actually rendered as visible
-            showDot.post {
-                val drawTime = System.nanoTime() //ui system flag for dot to appear
-                val timeTaken = (drawTime - visibilitySetTime) / 1000000 // Convert from nano to milliseconds
-                Log.d("VisibilityTiming", "Time taken for red dot to appear: ${timeTaken}ms")
-                visibilityTimeTextView.text ="Time to appear: ${timeTaken}ms"
-
-                // Record the time when the red dot becomes visible
-                dotVisibleTime = System.nanoTime()
-            }
-        }, 2000)
-
-        stopDot.setOnClickListener {
-            invisibilitySetTime = System.nanoTime() // Record the time when invisibility is set
-            showDot.visibility = View.INVISIBLE
-
-
-            showDot.post {
-                val disappearTime = System.nanoTime() //ui system flag for dot to disappear
-                val timeTaken = (disappearTime - invisibilitySetTime) / 1000000 // Convert from nano to milliseconds
-                Log.d("VisibilityTiming", "Time taken for reddot to disappear: ${timeTaken}ms") // Measure the time when the view is actually gone by finding the latency
-                invisibilityTimeTextView.text = "Time to disappear: ${timeTaken}ms"
-            }
-
-            // Calculate and display the reaction time
-            val reactionTime = (invisibilitySetTime - dotVisibleTime) / 1000000 // Convert to milliseconds
-            Log.d("ReactionTiming", "User reaction time: ${reactionTime}ms")
-            reactionTimeTextView.text = "Reaction Time: ${reactionTime}ms"
-        }
+    override fun onDestroy() {
+        super.onDestroy()
+        // Remove the frame callback to avoid memory leaks
+        Choreographer.getInstance().removeFrameCallback(frameCallback)
     }
 }
