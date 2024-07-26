@@ -1,14 +1,17 @@
 package com.example.myapplication
 
-import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.Observer
+import com.example.myapplication.utils.NetworkMonitor
 
 class SecondActivity : ComponentActivity() {
-    @SuppressLint("SetTextI18n")
+    private lateinit var networkMonitor: NetworkMonitor
+    private lateinit var networkStatusTextView: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -23,5 +26,15 @@ class SecondActivity : ComponentActivity() {
             startActivity(intent)
         }
 
+        networkMonitor = NetworkMonitor(this)
+        networkStatusTextView = findViewById(R.id.networkStatusTextView)
+        // Observe the network status
+        networkMonitor.observe(this, Observer { isConnected ->
+            if (isConnected) {
+                networkStatusTextView.text = "Network status: Connected"
+            } else {
+                networkStatusTextView.text = "Network status: Disconnected"
+            }
+        })
     }
 }

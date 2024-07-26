@@ -8,14 +8,21 @@ import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.Observer
 import androidx.lifecycle.lifecycleScope
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.myapplication.utils.DataCloudUpload
+import com.example.myapplication.utils.DataUploadWorker
+import com.example.myapplication.utils.NetworkMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 
 class ThirdActivity : ComponentActivity() {
-
     private var buttonAppearRequestedTime: Long = 0
     private var buttonActualAppearTime: Long = 0
     private var buttonClickTime: Long = 0
@@ -25,6 +32,9 @@ class ThirdActivity : ComponentActivity() {
     private lateinit var visibilityTimeTextView: TextView
     private lateinit var invisibilityTimeTextView: TextView
     private lateinit var reactionTimeTextView: TextView
+
+    private lateinit var networkMonitor: NetworkMonitor
+    private lateinit var networkStatusTextView: TextView
 
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -74,7 +84,7 @@ class ThirdActivity : ComponentActivity() {
                     Log.d("ThirdActivity", "Button Click Time: $buttonClickTime ms")
                     val reactionDuration = (buttonClickTime - buttonActualAppearTime) / 1_000_000.0
                     Log.d("ThirdActivity", "Reaction Duration: $reactionDuration ms")
-                    reactionTimeTextView.text = "Reaction Time: ${reactionDuration}  ms"
+                    reactionTimeTextView.text = "Reaction Time: ${reactionDuration} ms"
 
                     runOnUiThread {
                         showDot.visibility = View.GONE
@@ -86,7 +96,14 @@ class ThirdActivity : ComponentActivity() {
                         invisibilityTimeTextView.text =
                             "Touch event handling (input latency): ${disappearDuration} ms"
                     }
+
+                    handleDataUploadOrStorage(
+                        reactionTimeTextView.text.toString(),
+                        visibilityTimeTextView.text.toString(),
+                        invisibilityTimeTextView.text.toString()
+                    )
                 }
+
             } catch (e: Exception) {
                 Log.e("ThirdActivity", "Error in coroutine", e)
             }
@@ -96,6 +113,87 @@ class ThirdActivity : ComponentActivity() {
             intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
         }
+
+        networkMonitor = NetworkMonitor(this)
+        networkStatusTextView = findViewById(R.id.networkStatusTextView)
+        // Observe the network status
+        networkMonitor.observe(this, Observer { isConnected ->
+            if (isConnected) {
+                networkStatusTextView.text = "Network status: Connected"
+                uploadPendingData()
+            } else {
+                networkStatusTextView.text = "Network status: Disconnected"
+            }
+        })
+    }
+
+    private fun handleDataUploadOrStorage(
+        reactionTime: String,
+        renderingDelay: String,
+        inputLatency: String
+    ) {
+        if (networkMonitor.value == true) {
+            DataCloudUpload.uploadDataToCloud(reactionTime, renderingDelay, inputLatency)
+        } else {
+            storeDataLocally(reactionTime, renderingDelay, inputLatency)
+        }
+    }
+
+    private fun storeDataLocally(
+        reactionTime: String,
+        renderingDelay: String,
+        inputLatency: String
+    ) {
+        val sharedPreferences = getSharedPreferences("local_data", MODE_PRIVATE)
+        val editor = sharedPreferences.edit()
+        editor.putString("reactionTime", reactionTime.toString())
+        editor.putString("renderingDelay", renderingDelay)
+        editor.putString("inputLatency", inputLatency)
+        editor.apply()
+
+        Log.d(
+            "ThirdActivity",
+            "Storing data locally: Reaction Time = $reactionTime, Rendering Delay = $renderingDelay, Input Latency = $inputLatency"
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d("onResume", "triggered")
+        if (networkMonitor.value == true) {
+            uploadPendingData()
+        }
+    }
+
+    private fun uploadPendingData() {
+        val sharedPreferences = getSharedPreferences("local_data", MODE_PRIVATE)
+        val reactionTime = sharedPreferences.getString("reactionTime", null)
+        val renderingDelay = sharedPreferences.getString("renderingDelay", null)
+        val inputLatency = sharedPreferences.getString("inputLatency", null)
+
+        if (reactionTime != null && renderingDelay != null && inputLatency != null) {
+            DataCloudUpload.uploadDataToCloud(reactionTime, renderingDelay, inputLatency)
+            val editor = sharedPreferences.edit()
+            editor.clear()
+            editor.apply()
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.d("onPause", "triggered")
+        scheduleUploadWorker()
+    }
+
+    private fun scheduleUploadWorker() {
+        val uploadWorkRequest = OneTimeWorkRequestBuilder<DataUploadWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+        WorkManager.getInstance(this).enqueue(uploadWorkRequest)
     }
 
     override fun onDestroy() {

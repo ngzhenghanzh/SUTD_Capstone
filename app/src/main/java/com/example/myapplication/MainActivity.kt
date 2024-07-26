@@ -1,18 +1,20 @@
 package com.example.myapplication
 
 import android.annotation.SuppressLint
-import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Button
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.Observer
+import com.example.myapplication.utils.DoNotDisturb
+import com.example.myapplication.utils.NetworkMonitor
 
 class MainActivity : ComponentActivity() {
-    @SuppressLint("SetTextI18n")
+    private lateinit var doNotDisturb: DoNotDisturb
+    private lateinit var networkMonitor: NetworkMonitor
+    private lateinit var networkStatusTextView: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -20,39 +22,28 @@ class MainActivity : ComponentActivity() {
         val welcomeTextView = findViewById<TextView>(R.id.welcomeTextView)
         welcomeTextView.text = getString(R.string.welcome)
 
+        doNotDisturb = DoNotDisturb(this)
         val dndClick = findViewById<Button>(R.id.startButton)
         dndClick.text = getString(R.string.DND)
         dndClick.setOnClickListener {
-            if (!isNotificationPolicyAccessGranted()) {
-                requestNotificationPolicyAccess()
+            if (!doNotDisturb.isNotificationPolicyAccessGranted()) {
+                doNotDisturb.requestNotificationPolicyAccess()
             } else {
-                enableDoNotDisturb()
+                doNotDisturb.enableDoNotDisturb()
                 navigateToSecondActivity()
             }
         }
-    }
 
-    private fun isNotificationPolicyAccessGranted(): Boolean {
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        return notificationManager.isNotificationPolicyAccessGranted
-    }
-
-    private fun requestNotificationPolicyAccess() {
-        val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-        startActivity(intent)
-    }
-
-    private fun enableDoNotDisturb() {
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (notificationManager.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_NONE) {
-            notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_NONE)
-            Toast.makeText(this, "DND is enabled!", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "DND already enabled!", Toast.LENGTH_SHORT).show()
-        }
-        navigateToSecondActivity()
+        networkMonitor = NetworkMonitor(this)
+        networkStatusTextView = findViewById(R.id.networkStatusTextView)
+        // Observe the network status
+        networkMonitor.observe(this, Observer { isConnected ->
+            if (isConnected) {
+                networkStatusTextView.text = "Network status: Connected"
+            } else {
+                networkStatusTextView.text = "Network status: Disconnected"
+            }
+        })
     }
 
     private fun navigateToSecondActivity() {
@@ -60,4 +51,3 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 }
-

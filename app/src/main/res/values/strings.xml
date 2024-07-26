@@ -8,4 +8,5 @@
     <string name="display_latency">Rendering delay (output latency)</string>
     <string name="reaction_time">Reaction Time:</string>
     <string name="DND">Enable DND</string>
+    <string name="network_status">Network status: Unknown</string>
 </resources>
