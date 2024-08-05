@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1027317350155",
+    "project_id": "htx-cognitive-app",
+    "storage_bucket": "htx-cognitive-app.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1027317350155:android:57fcccfe931bf3daa1ac0e",
+        "android_client_info": {
+          "package_name": "com.example.myapplication"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-lQKbcGjzkpsqcIEN_Zy6jZCsLhMv2SM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
